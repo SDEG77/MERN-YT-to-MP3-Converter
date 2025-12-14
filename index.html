@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube to MP3 Converter</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Loading overlay styles */
+  #loadingOverlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    z-index: 50; color: white; font-size: 1.5rem;
+    display: none;
+  }
+  .spinner {
+    border: 8px solid rgba(255, 255, 255, 0.3);
+    border-top: 8px solid white;
+    border-radius: 50%;
+    width: 60px; height: 60px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+  /* Floating musical notes animation */
+  .note {
+    position: absolute;
+    font-size: 1.5rem;
+    color: rgba(128,0,255,0.6);
+    animation: floatUp 6s linear infinite;
+  }
+  @keyframes floatUp {
+    0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(-50vh) rotate(360deg); opacity: 0; }
+  }
+
+  /* Neon glow effect for card */
+  .neon-card {
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 0 20px rgba(128,0,255,0.4), 0 0 40px rgba(128,0,255,0.3);
+    border-radius: 2rem;
+    overflow: hidden;
+  }
+
+  /* Equalizer pulse effect behind card */
+  .equalizer {
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 4px;
+  }
+  .bar {
+    width: 4px; height: 20px;
+    background: linear-gradient(to top, #8e2de2, #4a00e0);
+    animation: pulse 1s infinite ease-in-out;
+  }
+  .bar:nth-child(2) { animation-delay: 0.2s; }
+  .bar:nth-child(3) { animation-delay: 0.4s; }
+  .bar:nth-child(4) { animation-delay: 0.6s; }
+  .bar:nth-child(5) { animation-delay: 0.8s; }
+  @keyframes pulse {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1.5); }
+  }
+</style>
+</head>
+
+<body class="bg-gradient-to-br from-purple-100 via-pink-100 to-blue-100 flex items-center justify-center min-h-screen p-4 overflow-hidden">
+
+<!-- Floating notes -->
+<div id="notesContainer"></div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay">
+  <p class="mb-6 text-center">Converting... Please wait</p>
+  <div class="spinner"></div>
+</div>
+
+<div class="relative neon-card p-8 max-w-md w-full h-fit">
+  <h1 class="text-3xl font-bold text-center mb-2 text-purple-700">YouTube to MP3 Converter</h1>
+  <h2 class="text-xl italic text-center opacity-70 mb-6 text-purple-500">By SDEG77</h2>
+  
+  <input type="text" id="url" placeholder="Enter YouTube URL"
+    class="w-full p-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 mb-4 transition-shadow shadow-sm hover:shadow-md">
+  
+  <select id="quality" class="w-full p-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 mb-4 transition-shadow shadow-sm hover:shadow-md">
+    <option value="0" selected disabled>Select a Bitrate Quality</option>
+    <option value="0">Best Quality</option>
+    <option value="192K">192K</option>
+    <option value="128K">128K</option>
+    <option value="9">Worst Quality</option>
+  </select>
+
+  <button id="convertBtn"
+    class="w-full bg-purple-500 text-white font-semibold py-3 rounded-lg hover:bg-purple-600 transition-colors mb-10 shadow-lg hover:shadow-xl">
+    Convert & Download
+  </button>
+
+  <!-- Equalizer bars -->
+  <div class="equalizer my-6">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+  </div>
+</div>
+
+<script>
+const serverURL = 'http://192.168.1.173:3030';
+const loadingOverlay = document.getElementById('loadingOverlay');
+const convertBtn = document.getElementById('convertBtn');
+
+// Floating notes creation
+const notesContainer = document.getElementById('notesContainer');
+for(let i=0;i<20;i++){
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.style.left = Math.random() * 100 + 'vw';
+  note.style.fontSize = 12 + Math.random() * 24 + 'px';
+  note.style.animationDuration = 4 + Math.random() * 4 + 's';
+  note.textContent = '♪';
+  notesContainer.appendChild(note);
+}
+
+// Convert button
+convertBtn.addEventListener('click', async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) return alert("Please enter a YouTube URL!");
+
+  loadingOverlay.style.display = 'flex';
+  convertBtn.disabled = true;
+
+  try {
+    const quality = document.getElementById('quality').value;
+    const res = await axios.post(`${serverURL}/convert`, { url, quality });
+    const mp3File = res.data.file;
+    const mp3Url = `${serverURL}/audio_files/${encodeURIComponent(mp3File)}`;
+    const fileResp = await axios.get(mp3Url, { responseType: 'blob' });
+    const blobUrl = window.URL.createObjectURL(fileResp.data);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', mp3File);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    loadingOverlay.style.display = 'none';
+    convertBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
